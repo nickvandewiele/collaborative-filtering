@@ -8,51 +8,14 @@ import pandas as pd
 from numpy import dot
 from numpy.linalg import norm
 
+from utils import read_ratings
+from utils import read_names
+
+
 # paths to the files. download them from http://files.grouplens.org/datasets/movielens/ml-100k.zip if you don't have them yet
 MOVIE_RATINGS_PATH = 'ml-100k/u.data'
 MOVIE_NAMES_PATH = 'ml-100k/u.item'
 RECOMMENDER_PATH = 'result.csv'
-
-
-def read_ratings(path_to_ratings):
-    """
-    Read the raw data of the movie ratings.
-    
-    Returns a list of tuples:
-    (user id, movie id, rating)
-    """
-
-    data = []
-    with open(path_to_ratings) as f:
-        for line in f:
-            # user id | item id | rating | timestamp
-            pieces = line.split()
-            user_id = int(pieces[0])
-            movie_id = int(pieces[1])
-            rating = float(pieces[2])
-            data.append((user_id, movie_id, rating))
-        
-    return data
-
-
-def read_names(path_to_names):
-    """
-    Read the mapping of movie id -> movie name
-    
-    Returns a dictionary
-    {movie id -> movie name}
-    """
-
-    data = {}
-    with open(path_to_names) as f:
-        for line in f:
-            # movie id | movie title | ...
-            pieces = line.split('|')
-            movie_id = int(pieces[0])
-            title = pieces[1]
-            data[movie_id] = title
-        
-    return data
 
 
 def similarity(group_of_movie_ratings):
