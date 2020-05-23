@@ -105,9 +105,6 @@ def recommend(user_id, ratings, movie_names, n_neighbors=10, n_recomm=5):
     
     """
     
-    # get the ratings of the user
-    ratings_user = ratings.loc[user_id, :]
-    
     # all the items a user has not rated, that can be recommended
     all_items = ratings.loc[user_id,:]
     unrated_items = all_items.loc[all_items.isnull()]
@@ -138,15 +135,39 @@ def recommend(user_id, ratings, movie_names, n_neighbors=10, n_recomm=5):
     return recommends
 
 
-def predict():
+def predict(user_id, item_id, ratings):
+    """
+    Make a prediction of the rating of an item for a user based on ratings data.
+
+    Parameters:
+    - user_id: int, id of the user in the dataset
+    - item_id: int, id of the item in the dataset
+    - ratings: pd.DataFrame, ratings dataset
+
+    Returns:
+    - prediction: float
+
+    """
+
+    # compute user similarities
+    similarities = compute_similarities(user_id, ratings)
+    
+    prediction = predict_rating(item_id, ratings, similarities, N=N_NEIGHBORS)
+    
+    return prediction
+
+
+if __name__ == '__main__':
 
     # read ratings data
     ratings = read_ratings(MOVIE_RATINGS_PATH)
     ratings = pd.DataFrame(data=ratings, columns=['user', 'movie', 'rating'])
     ratings = ratings.astype(int)
 
+    # take a sample user, item
     sample = ratings.sample(random_state=42)
     user_id = sample.user.values[0]
+    item_id = sample.movie.values[0]
 
     # convert long to wide
     ratings = ratings.pivot(index='user', columns='movie', values='rating')
@@ -154,12 +175,14 @@ def predict():
     # read movie names
     movie_names = read_names(MOVIE_NAMES_PATH)
 
+    # make a prediction for a specific user of a specific movie
+    prediction = predict(user_id, item_id, ratings)
+    print('Prediction for user {} of {}: {}'.format(user_id, movie_names[item_id], prediction))
+
     # recommend
     recommends = recommend(user_id, ratings, movie_names, n_neighbors=N_NEIGHBORS, n_recomm=N_RECOMMENDATIONS)
     print(recommends)
 
     print('Done recommending!')
 
-
-if __name__ == '__main__':
-    predict()
+    
