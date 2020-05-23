@@ -95,7 +95,7 @@ def recommend(user_id, ratings, movie_names, n_neighbors=10, n_recomm=5):
     
     parameters:
     - user_id: int, user to generate recommendations for
-    - ratings: pd.DataFrame, user-movie ratings
+    - ratings: pd.DataFrame, user-movie ratings in long format
     - movie_names: dict, mapping of (movie id -> movie name)
     - n_neighbors: int: the number of neighbors to use to generate rating predictions
     - n_recomm: int, number of movies to recommend
@@ -105,8 +105,11 @@ def recommend(user_id, ratings, movie_names, n_neighbors=10, n_recomm=5):
     
     """
     
+    # convert long to wide
+    ratings_wide = ratings.pivot(index='user', columns='movie', values='rating')
+
     # all the items a user has not rated, that can be recommended
-    all_items = ratings.loc[user_id,:]
+    all_items = ratings_wide.loc[user_id,:]
     unrated_items = all_items.loc[all_items.isnull()]
     
     # convert the index with item ids into Series values
@@ -114,10 +117,10 @@ def recommend(user_id, ratings, movie_names, n_neighbors=10, n_recomm=5):
     print('User {} has {} unrated items.'.format(user_id, len(unrated_items)))
     
     # compute user similarities
-    similarities = compute_similarities(user_id, ratings)
+    similarities = compute_similarities(user_id, ratings_wide)
         
     # generate predictions for unseen items based on the user similarity data
-    predictions = unrated_items.apply(lambda d: predict_rating(d, ratings, similarities, N=n_neighbors))
+    predictions = unrated_items.apply(lambda d: predict_rating(d, ratings_wide, similarities, N=n_neighbors))
     
     # sort items by highest predicted rating
     predictions = predictions.sort_values(ascending=False)
@@ -142,17 +145,20 @@ def predict(user_id, item_id, ratings):
     Parameters:
     - user_id: int, id of the user in the dataset
     - item_id: int, id of the item in the dataset
-    - ratings: pd.DataFrame, ratings dataset
+    - ratings: pd.DataFrame, ratings dataset in long format
 
     Returns:
     - prediction: float
 
     """
 
+    # convert long to wide
+    ratings_wide = ratings.pivot(index='user', columns='movie', values='rating')
+
     # compute user similarities
-    similarities = compute_similarities(user_id, ratings)
+    similarities = compute_similarities(user_id, ratings_wide)
     
-    prediction = predict_rating(item_id, ratings, similarities, N=N_NEIGHBORS)
+    prediction = predict_rating(item_id, ratings_wide, similarities, N=N_NEIGHBORS)
     
     return prediction
 
@@ -167,10 +173,9 @@ if __name__ == '__main__':
     # take a sample user, item
     sample = ratings.sample(random_state=42)
     user_id = sample.user.values[0]
-    item_id = sample.movie.values[0]
 
-    # convert long to wide
-    ratings = ratings.pivot(index='user', columns='movie', values='rating')
+
+    item_id = sample.movie.values[0]
 
     # read movie names
     movie_names = read_names(MOVIE_NAMES_PATH)
