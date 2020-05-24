@@ -15,7 +15,13 @@ from utils import read_names
 # paths to the files. download them from http://files.grouplens.org/datasets/movielens/ml-100k.zip if you don't have them yet
 MOVIE_RATINGS_PATH = 'ml-100k/u.data'
 MOVIE_NAMES_PATH = 'ml-100k/u.item'
-RECOMMENDER_PATH = 'result.csv'
+SIMILARITIES_PATH = 'result.csv'
+
+# minimum co-occurrence of movie pairs
+MIN_OCCURRENCES = 50
+
+# number of recommendations
+N_RECOMMENDATIONS = 5
 
 
 def similarity(group_of_movie_ratings):
@@ -35,15 +41,22 @@ def similarity(group_of_movie_ratings):
     return cos_sim
 
 
-def load_recommender(recommender_path):
+def load_item_similarities(similarities_path):
+    """
+    Reads a csv  with movie pair similarities and co-occurrences.
 
-    df = pd.read_csv(recommender_path)
+    Returns:
+    - pd.DataFrame with columns [movie a, movie b, similarity, co-occurrence]
+
+    """
+
+    df = pd.read_csv(similarities_path)
     return df
 
 
 def recommend(
     movie_id, 
-    ratings, 
+    similarities, 
     names, 
     min_cooccurrence=50, 
     top=5):
@@ -52,21 +65,22 @@ def recommend(
     Make movie recommendations for the given movie.
     
     Input:
-    - ratings: the movie ratings with similarity measures
+    - similarities: the movie ratings with similarity measures
     - movie_id: the movie id for which you want recommendations
     - names: a mapping of movie id -> movie name
     - min_count: the minimum threshold for co-occurrence
     - top: the number of recommendations to make
     
     Returns:
-    None
+    - pd.DataFrame with columns [recommended movie, title, similarity, co-occurrence]
+
     """
     
     # filter based on given movie, minimum occurrence
-    recomm = ratings.loc[
-        ((ratings.movie_1 == movie_id) | \
-        (ratings.movie_2 == movie_id)) & \
-        (ratings.cooccurrence >= min_cooccurrence)]
+    recomm = similarities.loc[
+        ((similarities.movie_1 == movie_id) | \
+        (similarities.movie_2 == movie_id)) & \
+        (similarities.cooccurrence >= min_cooccurrence)]
     
     # sort by similarity measure
     recomm = recomm.sort_values(by=['similarity'], ascending=False)
@@ -112,27 +126,109 @@ def train():
     df = pd.concat([ratings_similar, cooccurrence], axis=1)
 
     df = df.reset_index().sort_values(by=['cooccurrence', 'similarity'], ascending=False)
-    df.to_csv(RECOMMENDER_PATH, index=False)
+    df.to_csv(SIMILARITIES_PATH, index=False)
 
     print('Done training!')
 
 
 
-def predict():
+def predict(user_id, item_id, ratings, similarities, min_cooccurrence=50, top=5):
+    """
+    Make a prediction of the rating of an item for a user based on ratings data.
 
-    ratings = load_recommender(RECOMMENDER_PATH)
-    movie_names = read_names(MOVIE_NAMES_PATH)
-    movie_id = 10
-    min_cooccurrence=50
-    top=5
-    recommendations = recommend(movie_id, ratings, movie_names, min_cooccurrence, top)
+    If the item was already rated by the user, simply return the rating.
+    If not:
+    - find the most similar items, but only keep items above a minimum co-occurrence threshold.
+    - only keep item pairs of items that have been rated by the user already
+    - sort the items based on most similar, and keep the top n of item pairs
+    - give a rating based on the average rating that the user gave to the list of most similar items.
 
-    print('Recommendations for {}'.format(movie_names[movie_id]))
-    print(recommendations)
+    Parameters:
+    - user_id: int, id of the user in the dataset
+    - item_id: int, id of the item in the dataset
+    - ratings: pd.DataFrame, ratings in the long form (user_id, item_id, rating)
+    - similarities: pd.DataFrame, in the form [item id 1, item id 2, similarity, co-occurrence]
 
-    print('Done recommending!')
+    Returns:
+    - prediction: float, predicted rating by the user for the item
+
+    """
+
+    # search for (user, item) in existing ratings
+    existing_ratings = ratings.loc[(ratings.user == user_id) & (ratings.movie == item_id)]
+
+    if len(existing_ratings) > 0:
+        print('Found existing ratings:\n{}'.format(existing_ratings))
+        # take first match
+        return existing_ratings.rating.values[0]
+
+    # find most similar movie
+    
+    # filter based on given movie, minimum occurrence
+    recomm = similarities.loc[
+        ((similarities.movie_1 == item_id) | \
+        (similarities.movie_2 == item_id)) & \
+        (similarities.cooccurrence >= min_cooccurrence)]
+
+    # remove movie pairs that have not been rated by the user
+    items_user = ratings.loc[ratings.user == user_id]
+    print('User {} has rated {} items.'.format(user_id, len(items_user)))
+
+    recomm = recomm.loc[recomm.movie_1.isin(items_user.movie) | recomm.movie_2.isin(items_user.movie)]
+    print('After removing movies that have not been rated by the user, we have {} items.'.format(len(recomm)))
+
+    # sort by similarity measure
+    recomm = recomm.sort_values(by=['similarity'], ascending=False)
+    
+    # keep top n recommendations
+    recomm = recomm.head(top).reset_index(drop=True)
+    
+    # get the list of similar movies
+    recomm['movie'] = recomm.apply(lambda row: row.movie_2 if row.movie_1 == movie_id 
+                                          else row.movie_1 , axis=1)
+    recomm['movie'] = recomm['movie'].astype(int)
+
+    recomm = recomm[['movie', 'similarity']]
+
+    # get the rating that the user gave to the similar movies
+    recomm['rating'] = recomm.movie.apply(
+        lambda idx: ratings.loc[(ratings.user == user_id) & (ratings.movie == idx)].rating.values[0])
+    
+    print(recomm)
+    predicted_rating = recomm.rating.mean()
+
+    return predicted_rating
 
 
 if __name__ == '__main__':
-    train()
-    predict()
+    
+    ratings = read_ratings(MOVIE_RATINGS_PATH)
+    ratings = pd.DataFrame(data=ratings, columns=['user', 'movie', 'rating'])
+    ratings = ratings.astype(int)
+
+    print(ratings.head())
+
+    # train()
+    
+    similarities = load_item_similarities(SIMILARITIES_PATH)
+    movie_names = read_names(MOVIE_NAMES_PATH)
+    
+    print(similarities.head())
+    
+    user_id = 381
+    movie_id = 12
+    
+
+    # # existing (user, item) pair:
+    # user_id = 196
+    # movie_id = 242
+    
+
+    # recommendations = recommend(movie_id, similarities, movie_names, min_cooccurrence=MIN_OCCURRENCES, top=N_RECOMMENDATIONS)
+
+    # print('Recommendations for {}'.format(movie_names[movie_id]))
+    # print(recommendations)
+    # print('Done recommending!')
+    
+    prediction = predict(user_id, movie_id, ratings, similarities)
+    print('Prediction for user {} of {}: {}'.format(user_id, movie_names[movie_id], prediction))

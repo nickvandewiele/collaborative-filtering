@@ -1,10 +1,6 @@
 # Item-based Collaborative Filtering
 
----
-
 ## Introduction
-
----
 
 
 Here, I explore [Collaborative Filtering](https://en.wikipedia.org/wiki/Collaborative_filtering), a technique used in recommender systems.
@@ -16,16 +12,12 @@ I focus on 2 types of collaborative filtering:
 
 ## Data
 
----
-
 The [MovieLens 100K dataset](https://grouplens.org/datasets/movielens/) is used for building the recommender systems.
 
 
 Copy the [dataset](http://files.grouplens.org/datasets/movielens/ml-100k.zip), and unzip it into a folder.
 
 ## Implementation
-
----
 
 
 The implementation of the collaborative filtering algorithms is done using Pandas. 
