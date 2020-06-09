@@ -1,3 +1,6 @@
+# project specific
+ml-100k/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
